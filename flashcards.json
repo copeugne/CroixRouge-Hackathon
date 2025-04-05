@@ -1,0 +1,71 @@
+[
+  {
+    "id": "0f18759d-941d-4214-94fa-5bc13c1e04c0",
+    "question": "First aid first step",
+    "answer": "Being safe",
+    "created_at": "2025-04-05T03:35:19.850552",
+    "tags": [],
+    "repetitions": 1,
+    "ease_factor": 2.65,
+    "interval": 3,
+    "next_review": "2025-04-08T10:40:30.872276",
+    "last_review": "2025-04-05T10:40:30.872292"
+  },
+  {
+    "id": "e08f1f3e-2a98-45ba-a58c-34e267c81920",
+    "question": "How to make a PCR",
+    "answer": "Find a defibrillator and call 911 ",
+    "created_at": "2025-04-05T10:41:26.642886",
+    "tags": [],
+    "repetitions": 1,
+    "ease_factor": 2.65,
+    "interval": 3,
+    "next_review": "2025-04-08T10:50:04.605776",
+    "last_review": "2025-04-05T10:50:04.605791"
+  },
+  {
+    "id": "c518b9c7-d58d-4da7-aced-49cecaf9cb64",
+    "question": "What is the first step in emergency response?",
+    "answer": "Check the scene for safety.",
+    "created_at": "2025-04-05T12:52:39.510213",
+    "tags": [],
+    "repetitions": 0,
+    "ease_factor": 2.5,
+    "interval": 1,
+    "next_review": "2025-04-06T12:56:21.896132",
+    "last_review": "2025-04-05T12:56:21.896143"
+  },
+  {
+    "id": "d22620f0-016f-41b2-8476-4d1fe7c55060",
+    "question": "What does CPR stand for?",
+    "answer": "Cardiopulmonary Resuscitation.",
+    "created_at": "2025-04-05T12:53:01.967093",
+    "tags": [],
+    "repetitions": 0,
+    "ease_factor": 2.5,
+    "interval": 1,
+    "next_review": "2025-04-06T12:56:35.363497",
+    "last_review": "2025-04-05T12:56:35.363512"
+  },
+  {
+    "id": "7d729a28-e7eb-4ff4-b899-ae2cff9e36d0",
+    "question": "How do you treat minor burns?",
+    "answer": "Cool with running water for at least 10 minutes, cover loosely with sterile dressing.",
+    "created_at": "2025-04-05T12:53:29.292954",
+    "tags": [],
+    "repetitions": 0,
+    "ease_factor": 2.5,
+    "interval": 1,
+    "next_review": "2025-04-06T12:56:27.428453",
+    "last_review": "2025-04-05T12:56:27.428470"
+  },
+  {
+    "id": "00bc910b-25b4-4df0-9738-062bb7e41354",
+    "question": "What are the signs of a stroke?",
+    "answer": "FAST (Face drooping, Arm weakness, Speech difficulties, Time to call emergency services).",
+    "created_at": "2025-04-05T13:27:12.305548",
+    "tags": [],
+    "repetitions": 0,
+    "ease_factor": 2.5
+  }
+]
