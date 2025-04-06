@@ -6,6 +6,13 @@ import os
 import random
 import uuid
 from pathlib import Path
+import requests
+import base64
+from io import BytesIO
+from PIL import Image
+import urllib.parse
+from frontend.middleware import analyze_difficult_flashcards, generate_ai_flashcards
+from frontend.flashcard_ai import init_flashcard_ai_state, render_ai_tab, apply_custom_ai_css
 
 # Default flashcard settings
 DEFAULT_FLASHCARD_SETTINGS = {
@@ -94,6 +101,9 @@ def init_flashcards_state():
     # Add a flag to get the next card
     if "get_next_flashcard" not in st.session_state:
         st.session_state.get_next_flashcard = False
+        
+    # Initialize AI-related state
+    init_flashcard_ai_state()
 
 # Spaced repetition algorithm functions
 def calculate_next_review(card, ease):
@@ -213,6 +223,14 @@ def save_flashcard_settings():
     except Exception as e:
         st.error(f"Failed to save flashcard settings: {e}")
 
+def save_ai_settings():
+    """Save AI assistant settings to file"""
+    try:
+        with open("flashcard_ai_settings.json", "w") as f:
+            json.dump(st.session_state.ai_settings, f, indent=2)
+    except Exception as e:
+        st.error(f"Failed to save AI settings: {e}")
+
 def save_flashcard_stats():
     """Save flashcard stats to file"""
     try:
@@ -281,14 +299,18 @@ def toggle_show_answer():
 
 def create_new_card():
     """Add a new flashcard"""
+    title = st.session_state.new_title
     question = st.session_state.new_question
     answer = st.session_state.new_answer
+    image_url = st.session_state.new_image_url
     
     if question.strip() and answer.strip():
         new_card = {
             'id': str(uuid.uuid4()),
+            'title': title.strip(),
             'question': question,
             'answer': answer,
+            'image_url': image_url.strip(),
             'created_at': datetime.now().isoformat(),
             'tags': [],
             'repetitions': 0,
@@ -424,6 +446,124 @@ def apply_custom_flashcards_css():
     </style>
     """, unsafe_allow_html=True)
 
+def download_and_cache_image(url):
+    """
+    Download an image from a URL and cache it locally.
+    Returns the path to the cached image, or None if the download fails.
+    """
+    # Create a cache directory if it doesn't exist
+    cache_dir = Path("image_cache")
+    cache_dir.mkdir(exist_ok=True)
+    
+    # Create a filename based on the URL
+    url_hash = str(hash(url))
+    file_extension = os.path.splitext(url)[1]
+    if not file_extension:
+        file_extension = ".png"  # Default extension
+    
+    cached_file_path = cache_dir / f"{url_hash}{file_extension}"
+    
+    # If already cached, return the path
+    if cached_file_path.exists():
+        return str(cached_file_path)
+    
+    # Try to download the image
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+        }
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()  # Raise an exception for bad responses
+        
+        # Save the image
+        with open(cached_file_path, 'wb') as f:
+            f.write(response.content)
+        
+        return str(cached_file_path)
+    except Exception as e:
+        st.error(f"Failed to download image: {str(e)}")
+        return None
+
+def get_image_as_base64(url):
+    """
+    Convert an image from a URL to a base64 string.
+    This works around CORS issues by embedding the image directly.
+    """
+    try:
+        # First try to download the image
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+        }
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()  # Raise an exception for bad responses
+        
+        # Convert to base64
+        image_data = base64.b64encode(response.content).decode("utf-8")
+        # Determine image type
+        if url.lower().endswith(".png"):
+            mime_type = "image/png"
+        elif url.lower().endswith((".jpg", ".jpeg")):
+            mime_type = "image/jpeg"
+        elif url.lower().endswith(".gif"):
+            mime_type = "image/gif"
+        elif url.lower().endswith(".svg"):
+            mime_type = "image/svg+xml"
+        else:
+            mime_type = "image/png"  # Default
+        
+        return f"data:{mime_type};base64,{image_data}"
+    except Exception as e:
+        st.error(f"Failed to process image: {str(e)}")
+        return None
+
+def display_image(url):
+    """
+    Display an image from a URL using multiple methods for maximum reliability.
+    
+    This function tries several approaches:
+    1. Direct display via st.image
+    2. Local caching and display
+    3. Base64 encoding to bypass CORS issues
+    4. HTML rendering with error handling
+    """
+    if not url or url.strip() == "":
+        return
+    
+    # Method 1: Try direct display first
+    try:
+        st.image(url, use_column_width=True)
+        return True
+    except Exception:
+        pass  # If it fails, continue to the next method
+    
+    # Method 2: Try downloading and caching
+    try:
+        cached_path = download_and_cache_image(url)
+        if cached_path:
+            st.image(cached_path, use_column_width=True)
+            return True
+    except Exception:
+        pass  # If it fails, continue to the next method
+    
+    # Method 3: Try base64 encoding
+    try:
+        base64_img = get_image_as_base64(url)
+        if base64_img:
+            st.markdown(f'<img src="{base64_img}" style="width:100%;">', unsafe_allow_html=True)
+            return True
+    except Exception:
+        pass  # If it fails, continue to the next method
+    
+    # Method 4: Fallback to HTML img tag with error handling
+    st.markdown(f"""
+    <div>
+        <img src="{url}" style="max-width:100%;" onerror="this.onerror=null;this.src='https://placehold.co/600x400?text=Image+Not+Available';"/>
+        <p style="color:gray;font-size:0.8em;">Image URL: {url}</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    return True
+
 def render_study_tab():
     """Render the study tab for reviewing flashcards"""
     # Add a debug button at the top to check session state
@@ -454,8 +594,10 @@ def render_study_tab():
         # Use a completely different approach with custom HTML and consistent styling
         
         card = st.session_state.current_flashcard
+        title = card.get("title", "")
         question = card.get("question", "Question not available")
         answer = card.get("answer", "Answer not available")
+        image_url = card.get("image_url", "")
         
         # Create a container with custom styling
         st.markdown("""
@@ -473,6 +615,14 @@ def render_study_tab():
             justify-content: center;
         }
         
+        .card-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #6c4ed4;
+            margin-bottom: 0.5rem;
+            text-align: center;
+        }
+        
         .question-text {
             font-size: 1.5rem;
             font-weight: 500;
@@ -487,6 +637,7 @@ def render_study_tab():
             padding: 1.5rem;
             border-radius: 8px;
             margin-top: 1.5rem;
+            margin-bottom: 1.5rem;
             font-size: 1.2rem;
             color: #2a6099;
         }
@@ -497,6 +648,13 @@ def render_study_tab():
             color: #666;
             text-align: center;
         }
+        
+        .card-image {
+            max-width: 100%;
+            margin-top: 1rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
         </style>
         """, unsafe_allow_html=True)
         
@@ -506,6 +664,7 @@ def render_study_tab():
             # Render the flashcard box
             st.markdown(f"""
             <div class="flashcard-box">
+                {f'<div class="card-title">{title}</div>' if title else ''}
                 <div class="question-text">{question}</div>
             """, unsafe_allow_html=True)
             
@@ -520,6 +679,13 @@ def render_study_tab():
                 # Show answer and rating buttons
                 st.markdown(f"""
                 <div class="answer-box">{answer}</div>
+                """, unsafe_allow_html=True)
+                
+                # Display image if available
+                if image_url:
+                    display_image(image_url)
+                
+                st.markdown(f"""
                 <p class="rating-text">How well did you remember this?</p>
                 """, unsafe_allow_html=True)
                 
@@ -554,6 +720,8 @@ def render_study_tab():
             
         # Show card details
         with st.expander("Card Details"):
+            if title:
+                st.write(f"Title: {title}")
             st.write(f"Card ID: {card.get('id', 'N/A')}")
             st.write(f"Created: {datetime.fromisoformat(card.get('created_at', datetime.now().isoformat())).strftime('%Y-%m-%d')}")
             
@@ -613,19 +781,26 @@ def render_create_tab():
     
     with st.form(key="new_card_form", clear_on_submit=False):
         # Initialize session state for form inputs if needed
+        if "new_title" not in st.session_state:
+            st.session_state.new_title = ""
         if "new_question" not in st.session_state:
             st.session_state.new_question = ""
         if "new_answer" not in st.session_state:
             st.session_state.new_answer = ""
+        if "new_image_url" not in st.session_state:
+            st.session_state.new_image_url = ""
         
+        title = st.text_input("Title", key="new_title", placeholder="Enter a title for the flashcard...")
         question = st.text_area("Question", key="new_question", height=100, 
                      placeholder="Enter your question here...")
         answer = st.text_area("Answer", key="new_answer", height=150,
                      placeholder="Enter the answer here...")
+        image_url = st.text_input("Image URL", key="new_image_url", placeholder="Optional: Enter an image URL...")
         
-        # Tags input (future enhancement)
-        # st.text_input("Tags (comma separated)", key="new_tags",
-        #              placeholder="Optional: tag1, tag2, tag3")
+        # Preview image if URL is provided
+        if image_url:
+            st.caption("Image Preview:")
+            display_image(image_url)
         
         submitted = st.form_submit_button("Create Flashcard", use_container_width=True)
         if submitted:
@@ -682,10 +857,21 @@ def render_manage_tab():
     if filtered_cards:
         st.write(f"Showing {len(filtered_cards)} cards")
         for i, card in enumerate(filtered_cards):
-            with st.expander(f"Card {i+1}: {card['question'][:50]}{'...' if len(card['question']) > 50 else ''}"):
+            # Use title in the expander if available, otherwise use the question
+            display_title = card.get('title', '')
+            display_text = display_title if display_title else card['question'][:50] + ('...' if len(card['question']) > 50 else '')
+            
+            with st.expander(f"Card {i+1}: {display_text}"):
                 # Card details
+                if 'title' in card and card['title'].strip():
+                    st.markdown(f"**Title:**\n{card['title']}")
                 st.markdown(f"**Question:**\n{card['question']}")
                 st.markdown(f"**Answer:**\n{card['answer']}")
+                
+                # Display image if available
+                if card.get('image_url'):
+                    st.markdown("**Image:**")
+                    display_image(card['image_url'])
                 
                 # Card metadata
                 col1, col2 = st.columns(2)
@@ -726,8 +912,10 @@ def render_manage_tab():
                 with col1:
                     if st.button("Edit", key=f"edit_{card['id']}"):
                         st.session_state.editing_card = card
+                        st.session_state.edit_title = card.get('title', '')
                         st.session_state.edit_question = card['question']
                         st.session_state.edit_answer = card['answer']
+                        st.session_state.edit_image_url = card.get('image_url', '')
                 
                 with col2:
                     if st.button("Delete", key=f"delete_{card['id']}"):
@@ -910,15 +1098,68 @@ def render_settings_tab():
         help="Automatically save changes when creating or reviewing cards"
     )
     
+    # AI Assistant Settings
+    st.subheader("AI Assistant Settings")
+    
+    # Default values if not present
+    if 'ai_settings' not in st.session_state:
+        st.session_state.ai_settings = {
+            "num_cards_to_generate": 3,
+            "generation_strategy": "related",
+            "difficulty_level": "medium"
+        }
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.session_state.ai_settings['num_cards_to_generate'] = st.slider(
+            "Default cards to generate",
+            min_value=1,
+            max_value=10,
+            value=st.session_state.ai_settings.get('num_cards_to_generate', 3),
+            step=1,
+            help="Default number of cards the AI should generate"
+        )
+    
+    with col2:
+        st.session_state.ai_settings['difficulty_level'] = st.selectbox(
+            "Default difficulty level",
+            options=["easy", "medium", "hard"],
+            index=["easy", "medium", "hard"].index(st.session_state.ai_settings.get('difficulty_level', 'medium')),
+            format_func=lambda x: x.capitalize(),
+            help="Default difficulty level for AI-generated cards"
+        )
+    
+    st.session_state.ai_settings['generation_strategy'] = st.selectbox(
+        "Default generation strategy",
+        options=["related", "breakdown", "alternative"],
+        index=["related", "breakdown", "alternative"].index(st.session_state.ai_settings.get('generation_strategy', 'related')),
+        format_func=lambda x: {
+            "related": "Related Concepts",
+            "breakdown": "Break Down Concepts",
+            "alternative": "Alternative Approaches"
+        }.get(x, x),
+        help="Default strategy for generating new flashcards"
+    )
+    
     # Save button
     if st.button("Save Settings", use_container_width=True):
         save_flashcard_settings()
+        # Save AI settings as well
+        save_ai_settings()
         st.success("Settings saved successfully!")
     
     # Reset button
     if st.button("Reset to Defaults", use_container_width=True):
         st.session_state.flashcard_settings = DEFAULT_FLASHCARD_SETTINGS
+        # Reset AI settings
+        st.session_state.ai_settings = {
+            "num_cards_to_generate": 3,
+            "generation_strategy": "related", 
+            "difficulty_level": "medium"
+        }
         save_flashcard_settings()
+        save_ai_settings()
         st.success("Settings reset to defaults!")
         st.rerun()
 
@@ -941,7 +1182,7 @@ def render_flashcards_interface():
         st.button("💬 Chat", key="goto_chat", on_click=switch_to_chat)
     
     # Create tabs for different sections
-    tab_labels = ["Study", "Create", "Manage", "Stats", "Settings"]
+    tab_labels = ["Study", "Create", "Manage", "Stats", "AI Assistant", "Settings"]
     tabs = st.tabs(tab_labels)
     
     # Study Tab
@@ -960,8 +1201,13 @@ def render_flashcards_interface():
     with tabs[3]:
         render_stats_tab()
     
-    # Settings Tab
+    # AI Assistant Tab
     with tabs[4]:
+        apply_custom_ai_css()
+        render_ai_tab()
+    
+    # Settings Tab
+    with tabs[5]:
         render_settings_tab()
     
     # Footer
