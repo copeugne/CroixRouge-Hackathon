@@ -426,11 +426,14 @@ function RapidResponseContent({ gameId }: { gameId: string }) {
 		simulateOtherPlayersAnswers, // Now defined before this hook
 	]);
 
-	const handleSelectAnswer = (index: number) => {
+	const handleSelectAnswer = (index: number, selectedText: string) => {
 		// Add check for currentQuestionData
 		if (selectedAnswer !== null || showFeedback || !currentQuestionData) return;
 
 		setSelectedAnswer(index);
+
+		// Log the selected text for debugging/analytics
+		console.log(`User selected: "${selectedText}" (index: ${index})`);
 
 		// Update player status
 		setPlayers((prevPlayers) => {
@@ -737,7 +740,7 @@ function RapidResponseContent({ gameId }: { gameId: string }) {
 												index !== currentQuestionData.correctAnswer &&
 												"ring-2 ring-red-500 ring-offset-2",
 										)}
-										onClick={() => handleSelectAnswer(index)}
+										onClick={() => handleSelectAnswer(index, option)}
 										disabled={selectedAnswer !== null || showFeedback}
 									>
 										<div className="flex items-center gap-3 sm:gap-4">
