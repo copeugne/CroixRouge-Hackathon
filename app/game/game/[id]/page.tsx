@@ -163,12 +163,15 @@ export default function GameGamePage() {
 		}
 	}, [timeLeft, selectedAnswer, toast, handleNextQuestion]); // handleNextQuestion is now stable
 
-	const handleSelectAnswer = (index: number) => {
+	const handleSelectAnswer = (index: number, selectedText: string) => {
 		if (selectedAnswer === null && currentQuestionData) {
 			// Check currentQuestionData
 			setSelectedAnswer(index);
 
 			const isCorrect = index === currentQuestionData.correctAnswer; // Use currentQuestionData
+
+			// Log the selected text for debugging/analytics
+			console.log(`User selected: "${selectedText}" (index: ${index})`);
 
 			if (isCorrect) {
 				// Increase score and streak
@@ -285,7 +288,7 @@ export default function GameGamePage() {
 										key={`option-${index}-${option.substring(0, 10)}`}
 										variant={getButtonVariant(index)}
 										className="h-auto w-full justify-start px-4 py-3 text-left sm:px-6 sm:py-4"
-										onClick={() => handleSelectAnswer(index)}
+										onClick={() => handleSelectAnswer(index, option)}
 										disabled={selectedAnswer !== null}
 									>
 										<div className="flex items-center gap-3 sm:gap-4">
